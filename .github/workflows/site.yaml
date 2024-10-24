@@ -39,4 +39,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist # replace with your build output directory (e.g., dist, build, etc.)
-          repository_url: https://github.com/${{ github.repository }}.git
