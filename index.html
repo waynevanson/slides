@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rust & Nix</title>
+  </head>
+
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <h1>Rust & Nix</h1>
+          <p>Declarative Development Environments</p>
+        </section>
+        <section>
+          <section>
+            <h2>Goals</h2>
+            <p><b>Key takaways</b></p>
+            <ol>
+              <li class="fragment">Learn how what Nix is about</li>
+              <li class="fragment">Build rust projects with Nix</li>
+            </ol>
+          </section>
+        </section>
+        <section>
+          <img src="/assets/pictures/001-red-dress.png" />
+        </section>
+        <section>
+          <h2>Nix</h2>
+          <p>Nix has a few elements</p>
+          <dl>
+            <div class="fragment">
+              <dt>Nix</dt>
+              <dd>Package Manager</dd>
+            </div>
+            <div class="fragment">
+              <dt>NixOS</dt>
+              <dd>Operating system contain Nix</dd>
+            </div>
+            <p class="fragment">
+              Runs on unix based systems, <b> including Darwin. </b>
+            </p>
+          </dl>
+        </section>
+        <section>
+          <h2>Nix</h2>
+          <p class="fragment">Why?</p>
+          <ol>
+            <li class="fragment">Reproducible - System as configuration</li>
+            <li class="fragment">Generations - Automatic rollbacks (NixOS)</li>
+            <li class="fragment">Versioned - Dependencies locked (Flakes)</li>
+          </ol>
+        </section>
+        <section>
+          <h2>Problems it solved</h2>
+        </section>
+        <section>
+          <img src="/assets/pictures/002-kid.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/003-limes.png" />
+        </section>
+        <section>
+          <h2>Preparation</h2>
+          <ol>
+            <li class="fragment">Time consuming (initially)</li>
+            <li class="fragment">
+              <p>Which path to take?</p>
+              <ol>
+                <li class="fragment">Flakes when possible</li>
+                <li class="fragment">Modules when required</li>
+                <li class="fragment">Home manager for vibes</li>
+              </ol>
+            </li>
+          </ol>
+        </section>
+        <section>
+          <h2>Uses</h2>
+          <ul>
+            <li class="fragment">Package management</li>
+            <li class="fragment">System configuration</li>
+            <li class="fragment">Development environments</li>
+            <li class="fragment">Continuous integration</li>
+            <li class="fragment">Containerization</li>
+          </ul>
+        </section>
+        <section>
+          <h2>Rust Project Development</h2>
+        </section>
+        <section>
+          <h2>Nix ready projects</h2>
+          <ol>
+            <li class="fragment">Download the repository</li>
+            <li class="fragment">
+              <p>Install dependencies</p>
+              <ul>
+                <li class="fragment">nix develop for flake.nix</li>
+                <li class="fragment">nix-shell for shell.nix</li>
+              </ul>
+            </li>
+            <li class="fragment">Develop!</li>
+          </ol>
+        </section>
+        <section>
+          <h2>Becoming Nix ready</h2>
+          <ol>
+            <li class="fragment">Download the repository</li>
+            <li class="fragment">
+              Add flake.nix by researching, trial and error
+            </li>
+            <li class="fragment">Integrate into IDE</li>
+            <li class="fragment">Run build & tests</li>
+          </ol>
+        </section>
+        <section>
+          <h2>Example Project - Tauri</h2>
+          <ol>
+            <li class="fragment">
+              Similar to Electron but uses Webkit instead of Chromium
+            </li>
+            <li class="fragment">
+              Web UI on the frontend (targetting browser environment)
+            </li>
+            <li class="fragment">
+              Rust for backend (syscalls, system config, permissions)
+            </li>
+          </ol>
+        </section>
+        <section>
+          <img src="/assets/pictures/005.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/004.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/007.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/pnpm-install.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/tauri-dev.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/rustup-lightmode.png" />
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="|1|3|8|9-14|15-26|28-33|35-39">
+            { pkgs ? import &lt;nixpkgs&gt; {} }:
+              let
+                overrides = (builtins.fromTOML (builtins.readFile ./rust-toolchain.toml));
+                libPath = with pkgs; lib.makeLibraryPath [
+                  # load external libraries that you need in your rust project here
+                
+            in
+              pkgs.mkShell rec {
+                buildInputs = with pkgs; [
+                  clang
+                  # Replace llvmPackages with llvmPackages_X, where X is the latest LLVM version (at the time of writing, 16)
+                  llvmPackages.bintools
+                  rustup
+                ];
+                RUSTC_VERSION = overrides.toolchain.channel;
+                # https://github.com/rust-lang/rust-bindgen#environment-variables
+                LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
+                shellHook = ''
+                  export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
+                  export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
+                  '';
+                # Add precompiled library to rustc search path
+                RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
+                  # add libraries here (e.g. pkgs.libvmi)
+                ]);
+                LD_LIBRARY_PATH = libPath;
+                # Add glibc, clang, glib, and other headers to bindgen search path
+                BINDGEN_EXTRA_CLANG_ARGS =
+                # Includes normal include path
+                (builtins.map (a: ''-I"${a}/include"'') [
+                  # add dev libraries here (e.g. pkgs.libvmi.dev)
+                  pkgs.glibc.dev
+                ])
+                # Includes with special directory paths
+                ++ [
+                  ''-I"${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"''
+                  ''-I"${pkgs.glib.dev}/include/glib-2.0"''
+                  ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
+                ];
+              }
+          </code></pre>
+        </section>
+        <section>
+          <img src="/assets/pictures/tauri-deps.png" />
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="|1|2-21|3-18|9-10|9|10|20">
+            with import &lt;nixpkgs&gt; { };
+            mkShell {
+              buildInputs = [
+                at-spi2-atk
+                atkmm
+                cairo
+                gdk-pixbuf
+                glib
+                gobject-introspection
+                gobject-introspection.dev
+                gtk3
+                harfbuzz
+                librsvg
+                libsoup_3
+                pango
+                webkitgtk_4_1
+                webkitgtk_4_1.dev
+              ];
+
+              PKG_CONFIG_PATH = "${glib.dev}/lib/pkgconfig:${libsoup_3.dev}/lib/pkgconfig:${webkitgtk_4_1.dev}/lib/pkgconfig:${at-spi2-atk.dev}/lib/pkgconfig:${gtk3.dev}/lib/pkgconfig:${gdk-pixbuf.dev}/lib/pkgconfig:${cairo.dev}/lib/pkgconfig:${pango.dev}/lib/pkgconfig:${harfbuzz.dev}/lib/pkgconfig";
+            }
+          </code></pre>
+        </section>
+        <section>
+          <pre><code data-trim="" data-line-numbers="|2,12|3,13|4-7,15|8,15|9|19-22|20|15,21|23-26|27-57|28-33|35-37|39-40|42-56|58-59|60-88|61-74|75-87|89-92|93-100|94|96-99|97|99|">
+          {
+            inputs = {
+              nixpkgs.url = "nixpkgs/nixpkgs-unstable";
+              fenix = {
+                url = "github:nix-community/fenix";
+                  inputs.nixpkgs.follows = "nixpkgs";
+              };
+              flake-utils.url = "github:numtide/flake-utils";
+              flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
+            };
+
+            outputs = {
+              nixpkgs,
+              flake-utils,
+              fenix,
+              ...
+            }:
+              flake-utils.lib.eachDefaultSystem (system: let
+                pkgs = import nixpkgs {
+                  inherit system;
+                  overlays = [fenix.overlays.default];
+                };
+                rust' = fenix.packages.${system}.fromToolchainFile {
+                  file = ./rust-toolchain.toml;
+                  sha256 = "sha256-txii9/4eh2fR+unoHKlPVcGphsHefEiNI+5wLPoCTpA=";
+                };
+                nativeBuildInputs = with pkgs; [
+                  # Rust dependencies
+                  clang
+                  # Replace llvmPackages with llvmPackages_X, where X is the latest LLVM version (at the time of writing, 16)
+                  llvmPackages.bintools
+                  # rustup
+                  rust'
+
+                  # Available only via fenix
+                  # Useful for integrating this version fo
+                  rust-analyzer-nightly
+
+                  pkg-config
+                  openssl
+
+                  # Tauri dependencies
+                  at-spi2-atk
+                  atkmm
+                  cairo
+                  gdk-pixbuf
+                  glib
+                  gobject-introspection
+                  gobject-introspection.dev
+                  gtk3
+                  harfbuzz
+                  librsvg
+                  libsoup_3
+                  pango
+                  webkitgtk_4_1
+                  webkitgtk_4_1.dev
+                ];
+                buildInputs = [];
+                allInputs = nativeBuildInputs ++ buildInputs;
+                env = with pkgs; {
+                  LIBCLANG_PATH = lib.makeLibraryPath [
+                    llvmPackages_latest.libclang.lib
+                  ];
+                  RUSTFLAGS = builtins.map (a: ''-L ${a}/lib'') [];
+                  LD_LIBRARY_PATH = lib.makeLibraryPath allInputs;
+                  BINGEN_EXTRA_CLANG_ARGS =
+                    (builtins.map (a: ''-I"${a}/include"'') [
+                      pkgs.glibc.dev
+                    ])
+                    ++ [
+                      ''-I"${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"''
+                      ''-I"${pkgs.glib.dev}/include/glib-2.0"''
+                      ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
+                    ];
+                  PKG_CONFIG_PATH =
+                    lib.strings.concatStringsSep ":"
+                    (builtins.map (a: ''${a}/lib/pkgconfig'')
+                      [
+                        glib.dev
+                        libsoup_3.dev
+                        at-spi2-atk.dev
+                        gtk3.dev
+                        gdk-pixbuf.dev
+                        cairo.dev
+                        pango.dev
+                        harfbuzz.dev
+                      ]);
+                };
+                shellHook = ''
+                  export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
+                  export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
+                '';
+              in {
+                packages.default = fenix.packages.${system}.minimal.toolchain;
+
+                devShells.default = pkgs.mkShell ({
+                    inherit nativeBuildInputs buildInputs shellHook;
+                  }
+                  // env);
+              });
+          }
+          </code></pre>
+        </section>
+        <section>
+          <img src="/assets/pictures/006.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/tauri-built.png" />
+        </section>
+        <section>
+          <img src="/assets/pictures/OPA.png" />
+        </section>
+
+        <section>
+          <h1>IDE</h1>
+          <p>Integrating Nix into your editor</p>
+          <ol>
+            <li class="fragment">Nix VSCode extension</li>
+            <li class="fragment">Add settings for rust analyzer</li>
+          </ol>
+        </section>
+
+        <section>
+          <img src="/assets/pictures/preide.png" />
+        </section>
+
+        <section>
+          <pre><code data-trim="" data-line-numbers="|3|4-7|10|">
+            (import
+              (
+                let lock = builtins.fromJSON (builtins.readFile ./flake.lock); in
+                fetchTarball {
+                  url = lock.nodes.flake-compat.locked.url or "https://github.com/edolstra/flake-compat/archive/${lock.nodes.flake-compat.locked.rev}.tar.gz";
+                  sha256 = lock.nodes.flake-compat.locked.narHash;
+                }
+              )
+              { src = ./.; }
+            ).shellNix
+          </code></pre>
+        </section>
+
+        <section>
+          <img src="/assets/pictures/envsel.png" />
+        </section>
+
+        <section>
+          <img src="/assets/pictures/envset.png" />
+        </section>
+
+        <section>
+          <img src="/assets/pictures/postide.png" />
+        </section>
+
+        <section>
+          <h1>DEMO?</h1>
+        </section>
+
+        <section>
+          <h2>THANKS!</h2>
+          <p>
+            Will publish these details online soon via Rust Melbourne discord
+          </p>
+        </section>
+      </div>
+    </div>
+
+    <script type="module" src="src/index.ts"></script>
+  </body>
+</html>
